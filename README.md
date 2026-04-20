@@ -2,7 +2,7 @@
 
 An end-to-end Formula 1 analytics and simulation platform that predicts race outcomes, simulates full races lap-by-lap, and compares drivers head-to-head — backed by real F1 data (FastF1 + Ergast), machine learning (LSTM + RL + Monte Carlo), and a retrieval-augmented prompt layer.
 
-> **Status:** 🚧 Step 1 of 8 — scaffolding in progress.
+> **Status:** 🚧 Step 2 of 8 — data layer shipped.
 
 ---
 
@@ -80,9 +80,10 @@ python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 
-# 3. (step 2+) Ingest data
-python scripts/ingest_ergast.py --since 2018
-python scripts/ingest_fastf1.py --season 2024
+# 3. Ingest data
+python scripts/ingest_ergast.py --from 2000 --to 2025      # ~1.5 min, 500 races
+python scripts/ingest_fastf1.py --from 2022 --to 2025      # ~20–30 min, downloads cache
+python scripts/verify_data.py                              # prints row counts
 
 # 4. (step 7+) Launch UI
 streamlit run frontend/streamlit_app.py
@@ -113,7 +114,7 @@ f1_project/
 Each stage ends with a git commit + push. The README is refreshed at each stage.
 
 - [x] **1. Scaffold + Git init** — repo skeleton, README, `.gitignore`, deps pinned
-- [ ] **2. Data layer** — FastF1 + Ergast ingestion → Parquet cache; weather client
+- [x] **2. Data layer** — Ergast/Jolpica + FastF1 ingestion → Parquet cache; weather client
 - [ ] **3. Feature engineering + EDA** — driver/team/circuit/consistency features; notebook
 - [ ] **4. ML core** — LSTM race predictor, Monte Carlo simulator, RL pit-strategy agent
 - [ ] **5. FastAPI backend** — `/predict`, `/simulate`, `/h2h` endpoints
