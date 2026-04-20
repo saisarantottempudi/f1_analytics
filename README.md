@@ -2,7 +2,7 @@
 
 An end-to-end Formula 1 analytics and simulation platform that predicts race outcomes, simulates full races lap-by-lap, and compares drivers head-to-head — backed by real F1 data (FastF1 + Ergast), machine learning (LSTM + RL + Monte Carlo), and a retrieval-augmented prompt layer.
 
-> **Status:** 🚧 Step 3 of 8 — feature engineering + EDA shipped.
+> **Status:** 🚧 Step 4 of 8 — ML core (LSTM + Monte Carlo + RL) shipped.
 
 ---
 
@@ -89,6 +89,11 @@ python scripts/verify_data.py                              # prints row counts
 python scripts/build_features.py                           # → data/processed/features.parquet
 python notebooks/01_eda.py                                 # regenerates charts in notebooks/figures/
 
+# 5. Train the ML layer (Stage 4)
+python scripts/train_predictor.py --epochs 60              # LSTM → models/lstm_predictor.pt
+python scripts/run_simulation.py --sims 1000               # Monte Carlo demo
+python scripts/train_rl_pit.py --episodes 1500             # RL pit-strategy → models/rl_pit_q.json
+
 # 4. (step 7+) Launch UI
 streamlit run frontend/streamlit_app.py
 ```
@@ -120,7 +125,7 @@ Each stage ends with a git commit + push. The README is refreshed at each stage.
 - [x] **1. Scaffold + Git init** — repo skeleton, README, `.gitignore`, deps pinned
 - [x] **2. Data layer** — Ergast/Jolpica + FastF1 ingestion → Parquet cache; weather client
 - [x] **3. Feature engineering + EDA** — 15 features across 6 families; EDA notebook with 5 charts
-- [ ] **4. ML core** — LSTM race predictor, Monte Carlo simulator, RL pit-strategy agent
+- [x] **4. ML core** — LSTM (PyTorch + MPS), Monte Carlo simulator, tabular-Q RL pit agent
 - [ ] **5. FastAPI backend** — `/predict`, `/simulate`, `/h2h` endpoints
 - [ ] **6. RAG layer** — Chroma vector DB over race summaries + prompt templates
 - [ ] **7. Streamlit frontend** — Dashboard / Simulation / H2H / Prediction screens
@@ -152,12 +157,21 @@ Form→finish Pearson ρ ≈ **0.62** on the 2024 slice — the rolling feature 
 
 ---
 
-## 🧠 ML approach (stage 4)
+## 🧠 ML core (stage 4 — shipped)
 
-- **LSTM time-series model** over per-lap features (tyre age, gap ahead, weather) → predicts finishing-position distribution.
-- **Monte Carlo simulator** runs 1 000 race replays per scenario; aggregates win / podium / points probabilities and SC/VSC likelihood.
-- **RL agent (tabular Q-learning first, upgrade to DQN if needed)** learns optimal pit-lap given tyre life, gap, and race phase.
-- **Hybrid RAG layer** retrieves relevant historical race summaries so the explanation layer grounds its narrative in real past incidents.
+| Component | Lives in | What it does |
+|---|---|---|
+| **LSTM predictor** | [backend/ml/predictor.py](backend/ml/predictor.py) | Stacked LSTM + categorical embeddings (driver / team / circuit) over a 5-race window. MC-dropout at inference yields a per-driver finish-position distribution. Trains on MPS in seconds. |
+| **Monte Carlo simulator** | [backend/ml/monte_carlo.py](backend/ml/monte_carlo.py) | Lap-by-lap race sim with compound-specific tyre deg, fuel burn, pit loss, SC/VSC triggers, and DNF sampling. 1 000 sims in ~5 s. |
+| **Tabular Q pit agent** | [backend/ml/rl_pit.py](backend/ml/rl_pit.py) | Q-learning over a discretised (phase, tyre-age, pace-rank, laps-left) state. Learns when to stay out vs. pit for Soft/Medium/Hard. |
+
+Why tabular Q (not DQN): the state space fits in a dict and trains in seconds on a laptop. Upgrade path is DQN if the discretisation hurts us later.
+
+Trained artifacts live in `models/` — `.pt` binaries are gitignored (re-train after clone), the small Q-table JSON ships in-repo so demos work out-of-the-box.
+
+### 📦 Hybrid RAG layer (stage 6)
+
+Retrieves relevant historical race summaries so the explanation layer grounds its narrative in real past incidents.
 
 ---
 
