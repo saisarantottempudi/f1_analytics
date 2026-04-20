@@ -11,12 +11,13 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from backend.api.h2h import router as h2h_router
+from backend.api.meta import router as meta_router
 from backend.api.predict import router as predict_router
 from backend.api.simulate import router as simulate_router
 
 app = FastAPI(
     title="F1 Analytics AI",
-    version="0.6.0",
+    version="0.7.0",
     description=(
         "Race prediction, full-race simulation, and driver head-to-head "
         "analytics backed by FastF1 + Ergast data and an ensemble of "
@@ -36,6 +37,7 @@ app.add_middleware(
 app.include_router(predict_router)
 app.include_router(simulate_router)
 app.include_router(h2h_router)
+app.include_router(meta_router)
 
 
 @app.get("/health", tags=["meta"])
@@ -44,7 +46,7 @@ def health() -> dict[str, str]:
     from rag.llm import have_key
     return {
         "status": "ok",
-        "stage": "6-rag",
+        "stage": "7-frontend",
         "rag_index_ready": str(rag_ready()),
         "llm_key_present": str(have_key()),
     }

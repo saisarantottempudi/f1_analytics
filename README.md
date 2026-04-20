@@ -2,7 +2,7 @@
 
 An end-to-end Formula 1 analytics and simulation platform that predicts race outcomes, simulates full races lap-by-lap, and compares drivers head-to-head — backed by real F1 data (FastF1 + Ergast), machine learning (LSTM + RL + Monte Carlo), and a retrieval-augmented prompt layer.
 
-> **Status:** 🚧 Step 6 of 8 — RAG + narrative explanations shipped.
+> **Status:** 🚧 Step 7 of 8 — Streamlit frontend shipped (4 screens).
 
 ---
 
@@ -103,8 +103,8 @@ python scripts/build_rag_index.py                          # → rag/corpus/race
 # Then any endpoint supports ?explain=true (template) or ?explain=true&llm=true
 # (Claude-Haiku refinement, requires ANTHROPIC_API_KEY or CLAUDE_API_KEY in .env)
 
-# 4. (step 7+) Launch UI
-streamlit run frontend/streamlit_app.py
+# 8. Launch the 4-screen UI (Stage 7) — keep uvicorn running in another terminal
+streamlit run frontend/streamlit_app.py                    # → http://localhost:8501
 ```
 
 ---
@@ -137,7 +137,7 @@ Each stage ends with a git commit + push. The README is refreshed at each stage.
 - [x] **4. ML core** — LSTM (PyTorch + MPS), Monte Carlo simulator, tabular-Q RL pit agent
 - [x] **5. FastAPI backend** — `/predict`, `/simulate`, `/h2h` + OpenAPI docs
 - [x] **6. RAG layer** — Chroma (MiniLM) over race narratives + Claude-Haiku explainer (BYO key)
-- [ ] **7. Streamlit frontend** — Dashboard / Simulation / H2H / Prediction screens
+- [x] **7. Streamlit frontend** — 4-screen UI (Home / Prediction / Simulation / H2H) hitting the FastAPI backend
 - [ ] **8. Replay animation + polish** — lap-by-lap animation, docs, demo GIF
 
 ---
@@ -218,6 +218,28 @@ End-to-end smoke test ([scripts/smoke_api.py](scripts/smoke_api.py)) hits all th
 **Files.** [corpus_builder.py](rag/corpus_builder.py) · [index.py](rag/index.py) · [prompts.py](rag/prompts.py) · [llm.py](rag/llm.py) · [explain.py](backend/api/explain.py)
 
 The API `/health` endpoint now reports `rag_index_ready` and `llm_key_present` so the Streamlit frontend (stage 7) can grey out the relevant toggles.
+
+## 🖥️ Stage 7 — Streamlit frontend (shipped)
+
+Four screens, all talking to the local FastAPI backend (no new business logic — the UI is a thin shell over `/meta`, `/predict`, `/simulate`, `/h2h`). Narrative toggles grey themselves out when the LLM key isn't present.
+
+| Screen | File | What it does |
+|---|---|---|
+| 🏎️ **Home Dashboard** | [streamlit_app.py](frontend/streamlit_app.py) | Race selector (populated from `/meta`), driver multi-select → starting grid, weather + sim settings. Writes selection to `st.session_state` for the other pages. |
+| 🔮 **Prediction** | [1_🔮_Prediction.py](frontend/pages/1_🔮_Prediction.py) | Calls `/predict`, shows predicted winner + pole + SC%, grouped bar chart of P(win)/P(podium)/P(points), progress-bar table. |
+| 🎮 **Race Simulation** | [2_🎮_Race_Simulation.py](frontend/pages/2_🎮_Race_Simulation.py) | Calls `/simulate`, renders a lap slider → leaderboard snapshot, tyre-compound scatter across all laps, filterable events panel. |
+| ⚔️ **Head-to-Head** | [3_⚔️_Head_to_Head.py](frontend/pages/3_⚔️_Head_to_Head.py) | Calls `/h2h` with optional circuit / season filters, shows headline edge, breakdown table, and a radar of normalised sections. |
+
+A shared [api_client.py](frontend/api_client.py) wraps `httpx` and caches `/health` + `/meta` for 30–60 s. Override the API base with `F1_API_BASE=...`.
+
+**Run both services:**
+
+```bash
+uvicorn backend.main:app --reload         # :8000
+streamlit run frontend/streamlit_app.py   # :8501
+```
+
+Smoke-verified both servers bind cleanly (`uvicorn` on `:8000`, `streamlit` on `:8501`) and that `scripts/smoke_api.py` still passes while the UI is running.
 
 ---
 
