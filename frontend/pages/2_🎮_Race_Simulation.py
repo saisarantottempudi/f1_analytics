@@ -1,9 +1,12 @@
-"""🎮 Race Simulation — lap-by-lap leaderboard, tyre strategy, replay, events."""
+"""🎮 Race Simulation — lap-by-lap leaderboard, animated replay, race trace."""
 
 from __future__ import annotations
 
+import time
+
 import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
 import streamlit as st
 
 from frontend.api_client import simulate
@@ -48,6 +51,9 @@ if run:
         except Exception as e:
             st.error(f"Simulation failed: {e}")
             st.stop()
+    # Reset replay state for the new simulation.
+    st.session_state.pop("replay_lap", None)
+    st.session_state.pop("replay_playing", None)
 
 resp = st.session_state["last_sim"]
 drivers_map = st.session_state.get("drivers_map", {})
@@ -62,53 +68,145 @@ m1.metric("🏁 Winner", name(resp["final_standings"][0]["driver_id"]))
 m2.metric("Laps run", resp["laps_ran"])
 m3.metric("Events logged", len(resp["events"]))
 
-# ---------- Race replay timeline ----------
-
-st.subheader("🎞️ Race replay")
-
 timeline = resp["timeline"]
 if not timeline:
     st.warning("No timeline snapshots returned.")
     st.stop()
 
 max_lap = len(timeline)
-lap = st.slider("Lap", 1, max_lap, max_lap, 1)
-snap = timeline[lap - 1]
+st.session_state.setdefault("replay_lap", max_lap)
+st.session_state.setdefault("replay_playing", False)
+
+# ---------- Race replay ----------
+
+st.subheader("🎞️ Race replay")
+
+play_cols = st.columns([1, 1, 1, 4])
+with play_cols[0]:
+    if st.button("▶️ Play" if not st.session_state["replay_playing"] else "⏸ Pause",
+                 use_container_width=True):
+        st.session_state["replay_playing"] = not st.session_state["replay_playing"]
+        if st.session_state["replay_playing"] and st.session_state["replay_lap"] >= max_lap:
+            st.session_state["replay_lap"] = 1
+with play_cols[1]:
+    if st.button("⏮ Reset", use_container_width=True):
+        st.session_state["replay_lap"] = 1
+        st.session_state["replay_playing"] = False
+with play_cols[2]:
+    speed = st.select_slider("Speed", ["0.5×", "1×", "2×", "4×"], value="2×",
+                             label_visibility="collapsed")
+
+lap = st.slider("Lap", 1, max_lap, st.session_state["replay_lap"], 1, key="replay_slider")
+# Slider drag wins over any auto-advance.
+if lap != st.session_state["replay_lap"]:
+    st.session_state["replay_lap"] = lap
+    st.session_state["replay_playing"] = False
+
+snap = timeline[st.session_state["replay_lap"] - 1]
 
 lb = pd.DataFrame(snap["standings"])
 lb["driver"] = lb["driver_id"].map(name)
 lb = lb[["position", "driver", "gap_s", "compound", "tyre_age", "retired"]]
 lb.columns = ["P", "driver", "gap (s)", "tyre", "tyre age", "out?"]
 
-st.dataframe(lb, hide_index=True, use_container_width=True)
+st.dataframe(lb, hide_index=True, use_container_width=True, height=min(720, 44 + 36 * len(lb)))
 
-# ---------- Tyre strategy chart ----------
+# Incremental auto-play. Streamlit isn't a game loop — we advance one lap per rerun.
+if st.session_state["replay_playing"] and st.session_state["replay_lap"] < max_lap:
+    delay = {"0.5×": 1.2, "1×": 0.6, "2×": 0.3, "4×": 0.15}[speed]
+    time.sleep(delay)
+    st.session_state["replay_lap"] += 1
+    st.rerun()
+elif st.session_state["replay_playing"]:
+    st.session_state["replay_playing"] = False  # hit the last lap
 
-st.subheader("🟢 Tyre strategy")
+# ---------- Animated position chart ----------
+
+st.subheader("🏁 Position animation (Plotly play button)")
 
 rows = []
 for i, s in enumerate(timeline, start=1):
     for st_row in s["standings"]:
         rows.append({
             "lap": i,
+            "driver_id": st_row["driver_id"],
             "driver": name(st_row["driver_id"]),
-            "compound": st_row["compound"],
             "position": st_row["position"],
+            "compound": st_row["compound"],
+            "tyre_age": st_row["tyre_age"],
+            "gap_s": st_row["gap_s"],
         })
-tyre_df = pd.DataFrame(rows)
+df_all = pd.DataFrame(rows)
 
-# Colour map matching F1 compound conventions.
 compound_colours = {"SOFT": "#e83030", "MEDIUM": "#f0c020", "HARD": "#eaeaea"}
+n_drivers = df_all["driver"].nunique()
 
-fig = px.scatter(
-    tyre_df, x="lap", y="driver", color="compound",
-    color_discrete_map=compound_colours,
-    title="Compound on track per lap",
+anim = px.scatter(
+    df_all, x="position", y="driver", animation_frame="lap",
+    color="compound", color_discrete_map=compound_colours,
+    hover_data=["tyre_age", "gap_s"],
+    category_orders={"driver": sorted(df_all["driver"].unique())},
+    range_x=[0, n_drivers + 1],
 )
-fig.update_traces(marker_size=7)
-fig.update_layout(height=max(320, 22 * tyre_df["driver"].nunique()),
-                  yaxis_title="", legend_title_text="")
-st.plotly_chart(fig, use_container_width=True)
+anim.update_traces(marker_size=14)
+anim.update_layout(height=max(360, 28 * n_drivers),
+                   yaxis_title="", xaxis_title="track position",
+                   legend_title_text="")
+st.plotly_chart(anim, use_container_width=True)
+
+# ---------- Race trace ----------
+
+st.subheader("📈 Race trace (position over laps)")
+
+trace = px.line(
+    df_all.sort_values(["driver", "lap"]),
+    x="lap", y="position", color="driver",
+    category_orders={"driver": sorted(df_all["driver"].unique())},
+)
+trace.update_yaxes(autorange="reversed", dtick=1)
+trace.update_traces(line=dict(width=2))
+trace.update_layout(height=520, legend=dict(orientation="v", x=1.02, y=1))
+st.plotly_chart(trace, use_container_width=True)
+
+# ---------- Tyre strategy gantt ----------
+
+st.subheader("🟢 Tyre strategy (per-driver stints)")
+
+# Build stint segments: runs of identical compound per driver.
+stints = []
+for drv, sub in df_all.sort_values("lap").groupby("driver"):
+    start_lap = None
+    prev_comp = None
+    for _, row in sub.iterrows():
+        if row["compound"] != prev_comp:
+            if prev_comp is not None:
+                stints.append({"driver": drv, "compound": prev_comp,
+                               "start": start_lap, "end": int(row["lap"]) - 1})
+            start_lap = int(row["lap"])
+            prev_comp = row["compound"]
+    stints.append({"driver": drv, "compound": prev_comp,
+                   "start": start_lap, "end": int(sub["lap"].max())})
+
+stints_df = pd.DataFrame(stints)
+gantt = go.Figure()
+for comp, colour in compound_colours.items():
+    sub = stints_df[stints_df["compound"] == comp]
+    if sub.empty:
+        continue
+    gantt.add_trace(go.Bar(
+        y=sub["driver"], base=sub["start"] - 0.5,
+        x=sub["end"] - sub["start"] + 1,
+        orientation="h", marker_color=colour, name=comp,
+        hovertemplate="%{y}: L%{base:.0f}–L%{x:.0f}<extra>" + comp + "</extra>",
+    ))
+gantt.update_layout(
+    barmode="stack", height=max(320, 24 * n_drivers),
+    xaxis_title="lap", yaxis_title="",
+    yaxis=dict(categoryorder="array",
+               categoryarray=sorted(df_all["driver"].unique(), reverse=True)),
+    legend_title_text="",
+)
+st.plotly_chart(gantt, use_container_width=True)
 
 # ---------- Events panel ----------
 

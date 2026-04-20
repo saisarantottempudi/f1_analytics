@@ -2,7 +2,7 @@
 
 An end-to-end Formula 1 analytics and simulation platform that predicts race outcomes, simulates full races lap-by-lap, and compares drivers head-to-head — backed by real F1 data (FastF1 + Ergast), machine learning (LSTM + RL + Monte Carlo), and a retrieval-augmented prompt layer.
 
-> **Status:** 🚧 Step 7 of 8 — Streamlit frontend shipped (4 screens).
+> **Status:** ✅ Complete — all 8 stages shipped. Race replay animation + race trace + docs polish landed in Stage 8.
 
 ---
 
@@ -138,7 +138,7 @@ Each stage ends with a git commit + push. The README is refreshed at each stage.
 - [x] **5. FastAPI backend** — `/predict`, `/simulate`, `/h2h` + OpenAPI docs
 - [x] **6. RAG layer** — Chroma (MiniLM) over race narratives + Claude-Haiku explainer (BYO key)
 - [x] **7. Streamlit frontend** — 4-screen UI (Home / Prediction / Simulation / H2H) hitting the FastAPI backend
-- [ ] **8. Replay animation + polish** — lap-by-lap animation, docs, demo GIF
+- [x] **8. Replay animation + polish** — auto-playing lap replay, race-trace line chart, tyre-stint gantt, offline PNG renderer
 
 ---
 
@@ -240,6 +240,26 @@ streamlit run frontend/streamlit_app.py   # :8501
 ```
 
 Smoke-verified both servers bind cleanly (`uvicorn` on `:8000`, `streamlit` on `:8501`) and that `scripts/smoke_api.py` still passes while the UI is running.
+
+## 🎞️ Stage 8 — replay animation + polish (shipped)
+
+The Simulation page now has four visualisations layered over the same `/simulate` response:
+
+1. **Auto-playing replay** — Play / Pause / Reset + a 0.5×/1×/2×/4× speed selector. Under the hood it advances `st.session_state["replay_lap"]` one lap per `st.rerun()`, so dragging the slider mid-playback takes over cleanly.
+2. **Position animation** — a Plotly scatter with a built-in play button, markers coloured by current tyre compound, hover shows tyre age + gap to leader.
+3. **Race trace** — classic F1 position-over-laps line chart. Y-axis inverted so P1 is on top.
+4. **Tyre-stint Gantt** — stacked horizontal bars per driver, one segment per stint, coloured by compound.
+
+An offline renderer ([scripts/render_race_trace.py](scripts/render_race_trace.py)) dumps the same race trace to PNG without spinning up the UI — so the static picture below is generated from the exact same simulator the app uses:
+
+```bash
+python scripts/render_race_trace.py --seed 7
+# → notebooks/figures/06_race_trace.png
+```
+
+![race trace](notebooks/figures/06_race_trace.png)
+
+*2024 Abu Dhabi GP, seed 7 — Sainz wins from Leclerc after a mid-race swap; two retirements visible as lines falling to the bottom.*
 
 ---
 
