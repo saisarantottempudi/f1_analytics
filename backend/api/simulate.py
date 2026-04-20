@@ -3,15 +3,17 @@
 from __future__ import annotations
 
 import numpy as np
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 
 from backend.api import state
+from backend.api.explain import explain
 from backend.api.predict import _driver_state_from_features
 from backend.api.schemas import (
     FinalStandingRow, LapSnapshot, RaceEvent, SimulateRequest, SimulateResponse,
     StrategyEntry,
 )
 from backend.ml.monte_carlo import RaceConfig, simulate_race
+from rag.prompts import simulate_prompt
 
 router = APIRouter(tags=["simulate"])
 
@@ -30,7 +32,11 @@ def _apply_strategies(drivers, strategies: list[StrategyEntry]) -> None:
 
 
 @router.post("/simulate", response_model=SimulateResponse)
-def simulate(req: SimulateRequest) -> SimulateResponse:
+def simulate(
+    req: SimulateRequest,
+    explain_flag: bool = Query(False, alias="explain"),
+    llm: bool = Query(False),
+) -> SimulateResponse:
     if not req.grid:
         raise HTTPException(400, "grid must contain at least one driver")
 
@@ -55,7 +61,7 @@ def simulate(req: SimulateRequest) -> SimulateResponse:
         RaceEvent(lap=e.lap, kind=e.kind, driver_id=e.driver_id, detail=e.detail)
         for e in res.events
     ]
-    return SimulateResponse(
+    resp = SimulateResponse(
         circuit_id=req.circuit_id,
         total_laps=req.total_laps,
         laps_ran=res.laps_ran,
@@ -63,3 +69,15 @@ def simulate(req: SimulateRequest) -> SimulateResponse:
         timeline=timeline,
         events=events,
     )
+
+    if explain_flag:
+        sim_dict = resp.model_dump()
+        narrative, source = explain(
+            retrieval_query=f"race at {req.circuit_id} chaotic safety car overtakes",
+            retrieval_filters={"circuit_id": req.circuit_id},
+            build_prompt=lambda retrieved: simulate_prompt(sim_dict, retrieved),
+            use_llm=llm,
+        )
+        resp.narrative = narrative
+        resp.narrative_source = source
+    return resp

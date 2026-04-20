@@ -55,6 +55,8 @@ class PredictResponse(BaseModel):
     pole_driver_id: str
     winner_driver_id: str
     sc_probability: float
+    narrative: str | None = None
+    narrative_source: Literal["template", "llm"] | None = None
 
 
 # ---------- /simulate ----------
@@ -102,6 +104,8 @@ class SimulateResponse(BaseModel):
     final_standings: list[FinalStandingRow]
     timeline: list[LapSnapshot]
     events: list[RaceEvent]
+    narrative: str | None = None
+    narrative_source: Literal["template", "llm"] | None = None
 
 
 # ---------- /h2h ----------
@@ -129,3 +133,5 @@ class H2HResponse(BaseModel):
     sections: list[H2HSection]
     overall_winner: Literal["A", "B", "TIE"]
     overall_edge_pct: float
+    narrative: str | None = None
+    narrative_source: Literal["template", "llm"] | None = None

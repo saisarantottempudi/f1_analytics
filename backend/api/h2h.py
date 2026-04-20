@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import pandas as pd
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 
 from backend.api import state
+from backend.api.explain import explain
 from backend.api.schemas import H2HRequest, H2HResponse, H2HSection
+from rag.prompts import h2h_prompt
 
 router = APIRouter(tags=["h2h"])
 
@@ -22,7 +24,11 @@ def _winner(a: float | None, b: float | None, smaller_is_better: bool) -> str | 
 
 
 @router.post("/h2h", response_model=H2HResponse)
-def head_to_head(req: H2HRequest) -> H2HResponse:
+def head_to_head(
+    req: H2HRequest,
+    explain_flag: bool = Query(False, alias="explain"),
+    llm: bool = Query(False),
+) -> H2HResponse:
     df = state.features()
     if req.driver_a == req.driver_b:
         raise HTTPException(400, "driver_a and driver_b must differ")
@@ -109,7 +115,7 @@ def head_to_head(req: H2HRequest) -> H2HResponse:
         edge_pct = 0.0
 
     seasons = (int(df["season"].min()), int(df["season"].max())) if not df.empty else None
-    return H2HResponse(
+    resp = H2HResponse(
         driver_a=req.driver_a,
         driver_b=req.driver_b,
         season_range=seasons,
@@ -118,3 +124,22 @@ def head_to_head(req: H2HRequest) -> H2HResponse:
         overall_winner=overall,
         overall_edge_pct=edge_pct,
     )
+
+    if explain_flag:
+        h2h_dict = resp.model_dump()
+        retrieval_filters: dict = {}
+        if req.circuit_id:
+            retrieval_filters["circuit_id"] = req.circuit_id
+        if req.season_from is not None:
+            retrieval_filters["season_from"] = req.season_from
+        if req.season_to is not None:
+            retrieval_filters["season_to"] = req.season_to
+        narrative, source = explain(
+            retrieval_query=f"{req.driver_a} vs {req.driver_b} battle quali race",
+            retrieval_filters=retrieval_filters,
+            build_prompt=lambda retrieved: h2h_prompt(h2h_dict, retrieved),
+            use_llm=llm,
+        )
+        resp.narrative = narrative
+        resp.narrative_source = source
+    return resp

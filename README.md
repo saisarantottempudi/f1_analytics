@@ -2,7 +2,7 @@
 
 An end-to-end Formula 1 analytics and simulation platform that predicts race outcomes, simulates full races lap-by-lap, and compares drivers head-to-head — backed by real F1 data (FastF1 + Ergast), machine learning (LSTM + RL + Monte Carlo), and a retrieval-augmented prompt layer.
 
-> **Status:** 🚧 Step 5 of 8 — FastAPI backend shipped (`/predict`, `/simulate`, `/h2h`).
+> **Status:** 🚧 Step 6 of 8 — RAG + narrative explanations shipped.
 
 ---
 
@@ -98,6 +98,11 @@ python scripts/train_rl_pit.py --episodes 1500             # RL pit-strategy →
 uvicorn backend.main:app --reload                          # → http://127.0.0.1:8000/docs
 python scripts/smoke_api.py                                # in-process end-to-end test
 
+# 7. Build the RAG index (Stage 6)
+python scripts/build_rag_index.py                          # → rag/corpus/races.jsonl + rag/chroma_db/
+# Then any endpoint supports ?explain=true (template) or ?explain=true&llm=true
+# (Claude-Haiku refinement, requires ANTHROPIC_API_KEY or CLAUDE_API_KEY in .env)
+
 # 4. (step 7+) Launch UI
 streamlit run frontend/streamlit_app.py
 ```
@@ -131,7 +136,7 @@ Each stage ends with a git commit + push. The README is refreshed at each stage.
 - [x] **3. Feature engineering + EDA** — 15 features across 6 families; EDA notebook with 5 charts
 - [x] **4. ML core** — LSTM (PyTorch + MPS), Monte Carlo simulator, tabular-Q RL pit agent
 - [x] **5. FastAPI backend** — `/predict`, `/simulate`, `/h2h` + OpenAPI docs
-- [ ] **6. RAG layer** — Chroma vector DB over race summaries + prompt templates
+- [x] **6. RAG layer** — Chroma (MiniLM) over race narratives + Claude-Haiku explainer (BYO key)
 - [ ] **7. Streamlit frontend** — Dashboard / Simulation / H2H / Prediction screens
 - [ ] **8. Replay animation + polish** — lap-by-lap animation, docs, demo GIF
 
@@ -194,9 +199,25 @@ End-to-end smoke test ([scripts/smoke_api.py](scripts/smoke_api.py)) hits all th
                 · Head-to-head quali wins (shared races)   A=21  B=3 → A
 ```
 
-### 📦 Hybrid RAG layer (stage 6)
+## 📦 Stage 6 — RAG + narrative explanations (shipped)
 
-Retrieves relevant historical race summaries so the explanation layer grounds its narrative in real past incidents.
+**What it does.** Every API endpoint now accepts `?explain=true`. The server:
+
+1. Generates a compact narrative per past race from results (24 for the 2024 slice → 500+ after full ingest) and embeds it into a persistent **Chroma** index using MiniLM (ONNX, no GPU, no API).
+2. On each request, retrieves the top-5 most-similar past races (filtered by `circuit_id` when relevant) and stuffs them into a mode-specific prompt template.
+3. **Always** returns a deterministic `narrative` built from the template — free, offline, fast.
+4. When `?llm=true` AND `ANTHROPIC_API_KEY` (or `CLAUDE_API_KEY`) is set, upgrades the narrative with **Claude Haiku 4.5** — cheapest model, default `claude-haiku-4-5-20251001`, prompt-cached system prompt so repeated calls barely cost anything. Override with `F1_LLM_MODEL`.
+5. If the LLM call fails for any reason, silently falls back to the template.
+
+**Sample generated narrative (2024 Bahrain GP):**
+
+> 2024 Bahrain Grand Prix at bahrain (2024-03-02). Max Verstappen (red_bull) won from grid P1. Podium: P1 Max Verstappen, P2 Sergio Pérez, P3 Carlos Sainz. Pole went to Max Verstappen. Biggest move was Guanyu Zhou gaining 6 positions (P17 → P11). Nico Hülkenberg lost 6 positions (P10 → P16).
+
+**Sample retrieval test** — query "wet race rainy Spa Belgian GP" → top hit `2024-14-spa` (Hamilton win from P3).
+
+**Files.** [corpus_builder.py](rag/corpus_builder.py) · [index.py](rag/index.py) · [prompts.py](rag/prompts.py) · [llm.py](rag/llm.py) · [explain.py](backend/api/explain.py)
+
+The API `/health` endpoint now reports `rag_index_ready` and `llm_key_present` so the Streamlit frontend (stage 7) can grey out the relevant toggles.
 
 ---
 

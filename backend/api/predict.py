@@ -2,15 +2,17 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 
 from backend.api import state
+from backend.api.explain import explain
 from backend.api.schemas import (
     DriverPrediction, GridEntry, PredictRequest, PredictResponse,
 )
 from backend.ml.monte_carlo import (
     DriverState, RaceConfig, monte_carlo, summary,
 )
+from rag.prompts import prediction_prompt
 
 router = APIRouter(tags=["predict"])
 
@@ -39,7 +41,11 @@ def _driver_state_from_features(entry: GridEntry, weather_rain: float) -> Driver
 
 
 @router.post("/predict", response_model=PredictResponse)
-def predict(req: PredictRequest) -> PredictResponse:
+def predict(
+    req: PredictRequest,
+    explain_flag: bool = Query(False, alias="explain"),
+    llm: bool = Query(False),
+) -> PredictResponse:
     if not req.grid:
         raise HTTPException(400, "grid must contain at least one driver")
 
@@ -64,7 +70,7 @@ def predict(req: PredictRequest) -> PredictResponse:
     winner = max(predictions, key=lambda p: p.p_win).driver_id
     pole = grid_sorted[0].driver_id
 
-    return PredictResponse(
+    resp = PredictResponse(
         circuit_id=req.circuit_id,
         n_sims=req.n_sims,
         drivers=predictions,
@@ -72,3 +78,15 @@ def predict(req: PredictRequest) -> PredictResponse:
         winner_driver_id=winner,
         sc_probability=float(mc["_sc_probability"][0]),
     )
+
+    if explain_flag:
+        ml_dict = resp.model_dump()
+        narrative, source = explain(
+            retrieval_query=f"race at {req.circuit_id} historical pole winner podium",
+            retrieval_filters={"circuit_id": req.circuit_id},
+            build_prompt=lambda retrieved: prediction_prompt(ml_dict, retrieved),
+            use_llm=llm,
+        )
+        resp.narrative = narrative
+        resp.narrative_source = source
+    return resp

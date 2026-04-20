@@ -45,7 +45,7 @@ def main() -> None:
     print("/health        ✅", r.json())
 
     # /predict ---
-    r = client.post("/predict", json={
+    r = client.post("/predict?explain=true", json={
         "circuit_id": circuit_id,
         "total_laps": 55,
         "grid": grid,
@@ -59,9 +59,11 @@ def main() -> None:
     top3 = sorted(j["drivers"], key=lambda d: -d["p_podium"])[:3]
     for d in top3:
         print(f"                · {d['driver_id']:<18} p_podium={d['p_podium']:.1%}")
+    if j.get("narrative"):
+        print(f"                🗒  ({j['narrative_source']}) {j['narrative'][:160]}…")
 
     # /simulate ---
-    r = client.post("/simulate", json={
+    r = client.post("/simulate?explain=true", json={
         "circuit_id": circuit_id,
         "total_laps": 55,
         "grid": grid,
@@ -74,10 +76,12 @@ def main() -> None:
     print(f"/simulate      ✅  laps_ran={j['laps_ran']}  "
           f"timeline_snapshots={len(j['timeline'])}  events={len(j['events'])}  "
           f"winner={j['final_standings'][0]['driver_id']}")
+    if j.get("narrative"):
+        print(f"                🗒  ({j['narrative_source']}) {j['narrative'][:160]}…")
 
     # /h2h ---  Pick two drivers that share races.
     top_drivers = [d["driver_id"] for d in grid[:6]]
-    r = client.post("/h2h", json={
+    r = client.post("/h2h?explain=true", json={
         "driver_a": top_drivers[0],
         "driver_b": top_drivers[1],
     })
@@ -88,6 +92,8 @@ def main() -> None:
           f"edge={j['overall_edge_pct']:.1f}%")
     for s in j["sections"][:4]:
         print(f"                · {s['label']:<40} A={s['a_value']}  B={s['b_value']}  → {s['winner']}")
+    if j.get("narrative"):
+        print(f"                🗒  ({j['narrative_source']}) {j['narrative'][:160]}…")
 
     print("\nAll endpoints OK.")
 

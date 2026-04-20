@@ -36,8 +36,9 @@ models/*.pkl
 models/*.h5
 models/checkpoints/
 
-# Vector DB persistence
+# Vector DB persistence + generated corpus
 rag/chroma_db/
+rag/corpus/
 rag/*.faiss
 
 # OS / editor

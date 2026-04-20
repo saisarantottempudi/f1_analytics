@@ -16,7 +16,7 @@ from backend.api.simulate import router as simulate_router
 
 app = FastAPI(
     title="F1 Analytics AI",
-    version="0.5.0",
+    version="0.6.0",
     description=(
         "Race prediction, full-race simulation, and driver head-to-head "
         "analytics backed by FastF1 + Ergast data and an ensemble of "
@@ -40,4 +40,11 @@ app.include_router(h2h_router)
 
 @app.get("/health", tags=["meta"])
 def health() -> dict[str, str]:
-    return {"status": "ok", "stage": "5-backend"}
+    from rag.index import is_ready as rag_ready
+    from rag.llm import have_key
+    return {
+        "status": "ok",
+        "stage": "6-rag",
+        "rag_index_ready": str(rag_ready()),
+        "llm_key_present": str(have_key()),
+    }
