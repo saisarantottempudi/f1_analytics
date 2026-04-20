@@ -84,6 +84,9 @@ class SimResult:
     per_driver_retired_lap: dict[str, int | None]
     events: list[LapEvent]
     laps_ran: int
+    # Per-lap standings snapshots: list of {lap: int, standings: [{driver, position, gap_s}]}.
+    # Only populated when simulate_race(..., record_timeline=True).
+    timeline: list[dict] = field(default_factory=list)
 
 
 def _compound_step_cost(c: Compound, age: int, tyre_mgmt: float) -> float:
@@ -103,9 +106,11 @@ def simulate_race(
     drivers: list[DriverState],
     config: RaceConfig,
     rng: np.random.Generator | None = None,
+    record_timeline: bool = False,
 ) -> SimResult:
     rng = rng or np.random.default_rng()
     events: list[LapEvent] = []
+    timeline: list[dict] = []
     sc_remaining = 0
     vsc_remaining = 0
 
@@ -172,6 +177,24 @@ def simulate_race(
             d.cum_time += lap_time
             d.tyre_age += 1
 
+        if record_timeline:
+            ranked = sorted(drivers, key=lambda d: (d.retired, d.cum_time))
+            leader_time = ranked[0].cum_time if ranked and not ranked[0].retired else 0.0
+            timeline.append({
+                "lap": lap,
+                "standings": [
+                    {
+                        "driver_id": d.driver_id,
+                        "position": i + 1,
+                        "gap_s": round(d.cum_time - leader_time, 3) if not d.retired else None,
+                        "retired": d.retired,
+                        "compound": d.current_compound,
+                        "tyre_age": d.tyre_age,
+                    }
+                    for i, d in enumerate(ranked)
+                ],
+            })
+
         # Early finish if all retired except one (rare).
         alive = [d for d in drivers if not d.retired]
         if len(alive) <= 1:
@@ -190,6 +213,7 @@ def simulate_race(
         per_driver_retired_lap={d.driver_id: d.retired_lap for d in drivers},
         events=events,
         laps_ran=laps_ran,
+        timeline=timeline,
     )
 
 

@@ -2,7 +2,7 @@
 
 An end-to-end Formula 1 analytics and simulation platform that predicts race outcomes, simulates full races lap-by-lap, and compares drivers head-to-head — backed by real F1 data (FastF1 + Ergast), machine learning (LSTM + RL + Monte Carlo), and a retrieval-augmented prompt layer.
 
-> **Status:** 🚧 Step 4 of 8 — ML core (LSTM + Monte Carlo + RL) shipped.
+> **Status:** 🚧 Step 5 of 8 — FastAPI backend shipped (`/predict`, `/simulate`, `/h2h`).
 
 ---
 
@@ -94,6 +94,10 @@ python scripts/train_predictor.py --epochs 60              # LSTM → models/lst
 python scripts/run_simulation.py --sims 1000               # Monte Carlo demo
 python scripts/train_rl_pit.py --episodes 1500             # RL pit-strategy → models/rl_pit_q.json
 
+# 6. Launch the API (Stage 5)
+uvicorn backend.main:app --reload                          # → http://127.0.0.1:8000/docs
+python scripts/smoke_api.py                                # in-process end-to-end test
+
 # 4. (step 7+) Launch UI
 streamlit run frontend/streamlit_app.py
 ```
@@ -126,7 +130,7 @@ Each stage ends with a git commit + push. The README is refreshed at each stage.
 - [x] **2. Data layer** — Ergast/Jolpica + FastF1 ingestion → Parquet cache; weather client
 - [x] **3. Feature engineering + EDA** — 15 features across 6 families; EDA notebook with 5 charts
 - [x] **4. ML core** — LSTM (PyTorch + MPS), Monte Carlo simulator, tabular-Q RL pit agent
-- [ ] **5. FastAPI backend** — `/predict`, `/simulate`, `/h2h` endpoints
+- [x] **5. FastAPI backend** — `/predict`, `/simulate`, `/h2h` + OpenAPI docs
 - [ ] **6. RAG layer** — Chroma vector DB over race summaries + prompt templates
 - [ ] **7. Streamlit frontend** — Dashboard / Simulation / H2H / Prediction screens
 - [ ] **8. Replay animation + polish** — lap-by-lap animation, docs, demo GIF
@@ -168,6 +172,27 @@ Form→finish Pearson ρ ≈ **0.62** on the 2024 slice — the rolling feature 
 Why tabular Q (not DQN): the state space fits in a dict and trains in seconds on a laptop. Upgrade path is DQN if the discretisation hurts us later.
 
 Trained artifacts live in `models/` — `.pt` binaries are gitignored (re-train after clone), the small Q-table JSON ships in-repo so demos work out-of-the-box.
+
+## 🌐 Stage 5 — API shipped
+
+Three FastAPI endpoints wrap the ML layer. OpenAPI docs at `/docs`.
+
+| Route | Body | Returns |
+|---|---|---|
+| `POST /predict` | circuit, total laps, grid, weather, `n_sims` | per-driver mean finish + P(win) / P(podium) / P(points), pole, predicted winner, SC probability |
+| `POST /simulate` | circuit, grid, optional strategies, weather, seed | final standings, lap-by-lap timeline snapshots, event log (SC/VSC/DNF/PIT) |
+| `POST /h2h` | driver_a, driver_b, optional season range + circuit | 8 comparison sections + overall-edge % |
+
+End-to-end smoke test ([scripts/smoke_api.py](scripts/smoke_api.py)) hits all three via `TestClient`. Sample 2024-slice output:
+
+```
+/predict       ✅  winner=leclerc  SC=70%
+                · max_verstappen  p_podium=99.0%
+                · leclerc         p_podium=98.5%
+/simulate      ✅  laps_ran=55  timeline_snapshots=55  events=27
+/h2h           ✅  norris vs piastri  shared=24  winner=A  edge=50.0%
+                · Head-to-head quali wins (shared races)   A=21  B=3 → A
+```
 
 ### 📦 Hybrid RAG layer (stage 6)
 
