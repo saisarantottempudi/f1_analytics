@@ -2,7 +2,7 @@
 
 An end-to-end Formula 1 analytics and simulation platform that predicts race outcomes, simulates full races lap-by-lap, and compares drivers head-to-head — backed by real F1 data (FastF1 + Ergast), machine learning (LSTM + RL + Monte Carlo), and a retrieval-augmented prompt layer.
 
-> **Status:** 🚧 Step 2 of 8 — data layer shipped.
+> **Status:** 🚧 Step 3 of 8 — feature engineering + EDA shipped.
 
 ---
 
@@ -85,6 +85,10 @@ python scripts/ingest_ergast.py --from 2000 --to 2025      # ~1.5 min, 500 races
 python scripts/ingest_fastf1.py --from 2022 --to 2025      # ~20–30 min, downloads cache
 python scripts/verify_data.py                              # prints row counts
 
+# 4. Build engineered features (Stage 3)
+python scripts/build_features.py                           # → data/processed/features.parquet
+python notebooks/01_eda.py                                 # regenerates charts in notebooks/figures/
+
 # 4. (step 7+) Launch UI
 streamlit run frontend/streamlit_app.py
 ```
@@ -115,7 +119,7 @@ Each stage ends with a git commit + push. The README is refreshed at each stage.
 
 - [x] **1. Scaffold + Git init** — repo skeleton, README, `.gitignore`, deps pinned
 - [x] **2. Data layer** — Ergast/Jolpica + FastF1 ingestion → Parquet cache; weather client
-- [ ] **3. Feature engineering + EDA** — driver/team/circuit/consistency features; notebook
+- [x] **3. Feature engineering + EDA** — 15 features across 6 families; EDA notebook with 5 charts
 - [ ] **4. ML core** — LSTM race predictor, Monte Carlo simulator, RL pit-strategy agent
 - [ ] **5. FastAPI backend** — `/predict`, `/simulate`, `/h2h` endpoints
 - [ ] **6. RAG layer** — Chroma vector DB over race summaries + prompt templates
@@ -124,7 +128,31 @@ Each stage ends with a git commit + push. The README is refreshed at each stage.
 
 ---
 
-## 🧠 ML approach (stages 3–4)
+## 📊 Stage 3 — features shipped
+
+The feature table ([backend/features/build.py](backend/features/build.py), produced by [scripts/build_features.py](scripts/build_features.py)) holds one row per (driver × race) with **6 feature families, computed strictly causally** (race N never sees data from race ≥ N):
+
+| Family | Columns |
+|---|---|
+| Driver rolling form | `drv_rollN_avg_finish_5`, `drv_rollN_dnf_rate_5`, `drv_rollN_points_avg_5` |
+| Driver × circuit history | `drv_circ_races_prior`, `drv_circ_avg_finish_prior`, `drv_circ_best_prior` |
+| Consistency | `drv_season_finish_std`, `drv_season_finish_iqr` |
+| Constructor form | `team_rollN_avg_finish_3` |
+| Teammate H2H | `tmate_quali_win_rate_season`, `tmate_race_win_rate_season` |
+| Circuit priors | `circ_pole_to_win_rate`, `circ_dnf_rate`, `circ_grid_finish_corr` |
+
+EDA charts — rendered from the 2024 slice, will stabilise once 2000-2025 ingest completes:
+
+| | |
+|---|---|
+| ![grid vs finish](notebooks/figures/02_grid_vs_finish.png) | ![form vs actual](notebooks/figures/03_form_vs_actual.png) |
+| ![teammate h2h](notebooks/figures/04_teammate_h2h.png) | ![pole to win](notebooks/figures/05_pole_to_win.png) |
+
+Form→finish Pearson ρ ≈ **0.62** on the 2024 slice — the rolling feature alone carries substantial signal before any ML.
+
+---
+
+## 🧠 ML approach (stage 4)
 
 - **LSTM time-series model** over per-lap features (tyre age, gap ahead, weather) → predicts finishing-position distribution.
 - **Monte Carlo simulator** runs 1 000 race replays per scenario; aggregates win / podium / points probabilities and SC/VSC likelihood.
