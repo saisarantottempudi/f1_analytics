@@ -1,0 +1,62 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# FastF1 cache (large, regenerable)
+cache/
+fastf1_cache/
+
+# Data artefacts — keep structure, ignore contents
+data/raw/*
+data/processed/*
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+
+# Model binaries
+models/*.pt
+models/*.pkl
+models/*.h5
+models/checkpoints/
+
+# Vector DB persistence
+rag/chroma_db/
+rag/*.faiss
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Claude Code local settings
+.claude/
+
+# Secrets
+.env
+.env.local
+*.key
+
+# Streamlit
+.streamlit/secrets.toml
+
+# Logs
+*.log
+logs/

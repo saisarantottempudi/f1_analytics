@@ -1,0 +1,37 @@
+# --- Core data ---
+fastf1>=3.3.0
+requests>=2.31.0
+pandas>=2.1.0
+numpy>=1.26.0
+pyarrow>=14.0.0
+
+# --- ML ---
+scikit-learn>=1.4.0
+torch>=2.2.0
+xgboost>=2.0.0
+
+# --- Simulation ---
+scipy>=1.11.0
+
+# --- RAG / Vector DB ---
+chromadb>=0.4.22
+sentence-transformers>=2.3.0
+
+# --- Backend ---
+fastapi>=0.110.0
+uvicorn[standard]>=0.27.0
+pydantic>=2.6.0
+
+# --- Frontend ---
+streamlit>=1.32.0
+plotly>=5.19.0
+altair>=5.2.0
+
+# --- Utilities ---
+python-dotenv>=1.0.0
+tqdm>=4.66.0
+
+# --- Dev ---
+jupyter>=1.0.0
+pytest>=8.0.0
+ruff>=0.3.0
