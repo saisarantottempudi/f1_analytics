@@ -37,9 +37,14 @@ with col3:
                                   ["(all)"] + m["circuits"], index=0)
 
 seasons = m.get("seasons", [])
-if seasons:
+if seasons and len(seasons) > 1:
     s_lo, s_hi = int(min(seasons)), int(max(seasons))
     season_range = st.slider("Season range", s_lo, s_hi, (s_lo, s_hi))
+elif seasons:
+    only = int(seasons[0])
+    st.caption(f"Season range: {only} (only one season in the feature table — "
+               "ingest more seasons to unlock the slider)")
+    season_range = (only, only)
 else:
     season_range = None
 
