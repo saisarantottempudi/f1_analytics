@@ -9,7 +9,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
 
-from frontend.api_client import simulate
+from api_client import simulate
 
 st.set_page_config(page_title="Race Simulation · F1 Analytics AI",
                    page_icon="🎮", layout="wide")

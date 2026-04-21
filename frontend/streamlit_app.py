@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import streamlit as st
 
-from frontend.api_client import health, meta
+from api_client import health, meta
 
 st.set_page_config(page_title="F1 Analytics AI", page_icon="🏎️", layout="wide")
 

@@ -6,7 +6,7 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 
-from frontend.api_client import predict
+from api_client import predict
 
 st.set_page_config(page_title="Prediction · F1 Analytics AI", page_icon="🔮", layout="wide")
 st.title("🔮 Race Prediction")

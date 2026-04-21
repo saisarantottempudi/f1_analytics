@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import RedirectResponse
 
 from backend.api.h2h import router as h2h_router
 from backend.api.meta import router as meta_router
@@ -38,6 +39,12 @@ app.include_router(predict_router)
 app.include_router(simulate_router)
 app.include_router(h2h_router)
 app.include_router(meta_router)
+
+
+@app.get("/", include_in_schema=False)
+def root() -> RedirectResponse:
+    # Hitting the bare host would otherwise return {"detail":"Not Found"}.
+    return RedirectResponse(url="/docs")
 
 
 @app.get("/health", tags=["meta"])

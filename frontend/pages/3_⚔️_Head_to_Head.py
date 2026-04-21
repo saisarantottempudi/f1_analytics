@@ -6,7 +6,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-from frontend.api_client import h2h, meta
+from api_client import h2h, meta
 
 st.set_page_config(page_title="Head-to-Head · F1 Analytics AI",
                    page_icon="⚔️", layout="wide")
